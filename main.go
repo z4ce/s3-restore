@@ -108,7 +108,7 @@ func processDictionary(svc *s3.S3, bucket string, final map[string]s3.ObjectVers
 func process(c *cli.Context) error {
 	sess := session.Must(session.NewSession())
 	svc := s3.New(sess)
-	targetTime, err := dateparse.ParseAny(c.GlobalString("taget"))
+	targetTime, err := dateparse.ParseAny(c.GlobalString("time"))
 	if err != nil {
 		return fmt.Errorf("Failed parsing time string: " + c.GlobalString("taget") + ":" + err.Error())
 	}
