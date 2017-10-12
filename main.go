@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/araddon/dateparse"
@@ -141,4 +142,5 @@ func main() {
 			Action: process,
 		},
 	}
+	app.Run(os.Args)
 }
