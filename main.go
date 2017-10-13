@@ -8,6 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/araddon/dateparse"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"gopkg.in/urfave/cli.v1"
@@ -40,6 +41,23 @@ func setVersion(svc *s3.S3, bucket string, key string, versionId string) error {
 	return nil
 }
 
+func makeDeleteMarker(obj *s3.ObjectVersion) s3.ObjectVersion {
+	fakeVersionID := "DELETE"
+	return s3.ObjectVersion{
+		Key:          obj.Key,
+		LastModified: obj.LastModified,
+		VersionId:    &fakeVersionID,
+	}
+}
+
+func makeDeleteMarker2(obj *s3.DeleteMarkerEntry) s3.ObjectVersion {
+	fakeVersionID := "DELETE"
+	return s3.ObjectVersion{
+		Key:          obj.Key,
+		LastModified: obj.LastModified,
+		VersionId:    &fakeVersionID,
+	}
+}
 func processVersion(final *map[string]s3.ObjectVersion, target time.Time, obj *s3.ObjectVersion) {
 	log.Print("Processing: ", obj)
 
@@ -51,13 +69,7 @@ func processVersion(final *map[string]s3.ObjectVersion, target time.Time, obj *s
 		log.Info("Adding key that doesn't exist", key)
 		// insert a delete marker for things that didn't exist
 		if obj.LastModified.After(target) {
-			fakeVersionID := "DELETE"
-			deleteObj := s3.ObjectVersion{
-				Key:          obj.Key,
-				LastModified: obj.LastModified,
-				VersionId:    &fakeVersionID,
-			}
-			(*final)[key] = deleteObj
+			(*final)[key] = makeDeleteMarker(obj)
 			return
 		}
 		(*final)[key] = *obj
@@ -78,25 +90,14 @@ func processDeleteMarker(final *map[string]s3.ObjectVersion, target time.Time, o
 	if obj.LastModified.After(target) {
 		return
 	}
-	fakeVersionID := "DELETE"
 	key := *obj.Key
 	curObj, exists := (*final)[key]
-	deleteObj := s3.ObjectVersion{
-		Key:          obj.Key,
-		LastModified: obj.LastModified,
-		VersionId:    &fakeVersionID,
-	}
 	if obj.LastModified.After(target) {
 		return
 	}
 
-	if !exists {
-		(*final)[key] = deleteObj
-		return
-	}
-
-	if obj.LastModified.After(*(*final)[key].LastModified) || curObj.LastModified.After(target) {
-		(*final)[key] = deleteObj
+	if !exists || obj.LastModified.After(*(*final)[key].LastModified) || curObj.LastModified.After(target) {
+		(*final)[key] = makeDeleteMarker2(obj)
 	}
 }
 
@@ -134,10 +135,22 @@ func processDictionary(svc *s3.S3, bucket string, final map[string]s3.ObjectVers
 
 func process(c *cli.Context) error {
 	fmt.Println("Beginning processing")
-	sess := session.Must(session.NewSession())
-	svc := s3.New(sess)
+	endpointurl := c.GlobalString("endpoint-url")
+	awsConfig := &aws.Config{
+		Endpoint: &endpointurl,
+	}
+
+	sess := session.Must(session.NewSession(awsConfig))
+	if sess == nil {
+		fmt.Println("Failed to create aws session")
+	}
+	svc := s3.New(sess, awsConfig)
+	if c.GlobalString("bucket") == "" {
+		fmt.Println("No bucket specified")
+		return nil
+	}
 	targetTime, err := dateparse.ParseAny(c.GlobalString("time"))
-	log.Print("Parsed time ", err)
+	log.Print("Parsed time ", targetTime)
 	if err != nil {
 		fmt.Println("Invalid time string", err)
 		return err
@@ -167,11 +180,15 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "bucket",
-			Usage: "s3 bucket to process",
+			Usage: "required: s3 bucket to process",
 		},
 		cli.StringFlag{
 			Name:  "time",
-			Usage: "time to restore to. Use format: 2006-01-02T15:04:05.999999999Z07:00",
+			Usage: "required: time to restore to. Use format: 2006-01-02T15:04:05.999999999Z07:00",
+		},
+		cli.StringFlag{
+			Name:  "endpoint-url",
+			Usage: "S3 compatible endpoint url",
 		},
 		cli.BoolFlag{
 			Name:  "debug",
