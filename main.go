@@ -69,7 +69,7 @@ func processVersion(final *map[string]s3.ObjectVersion, target time.Time, obj *s
 	// This is our object if
 	// If it is newer than what is currently in place
 	// b) curObj is currently a future delete marker
-	if curObj.LastModified.After(*(*final)[key].LastModified) || curObj.LastModified.After(target) {
+	if obj.LastModified.After(*(*final)[key].LastModified) || curObj.LastModified.After(target) {
 		(*final)[key] = *obj
 	}
 }
@@ -86,13 +86,16 @@ func processDeleteMarker(final *map[string]s3.ObjectVersion, target time.Time, o
 		LastModified: obj.LastModified,
 		VersionId:    &fakeVersionID,
 	}
+	if obj.LastModified.After(target) {
+		return
+	}
 
 	if !exists {
 		(*final)[key] = deleteObj
 		return
 	}
 
-	if curObj.LastModified.After(*(*final)[key].LastModified) {
+	if obj.LastModified.After(*(*final)[key].LastModified) || curObj.LastModified.After(target) {
 		(*final)[key] = deleteObj
 	}
 }
