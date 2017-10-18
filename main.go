@@ -11,10 +11,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"gopkg.in/urfave/cli.v1"
 )
 
-func setVersion(svc *s3.S3, bucket string, key string, versionId string) error {
+func setVersion(svc s3iface.S3API, bucket string, key string, versionId string) error {
 	log.Info("Setting version: ", bucket, " ", key, " ", versionId)
 	if versionId == "DELETE" {
 		input := &s3.DeleteObjectInput{
@@ -101,7 +102,7 @@ func processDeleteMarker(final *map[string]s3.ObjectVersion, target time.Time, o
 	}
 }
 
-func buildVersionDictionary(svc *s3.S3, bucket string, target time.Time) (final map[string]s3.ObjectVersion, err error) {
+func buildVersionDictionary(svc s3iface.S3API, bucket string, target time.Time) (final map[string]s3.ObjectVersion, err error) {
 	final = make(map[string]s3.ObjectVersion)
 	log.Print("Getting versions...")
 	err = svc.ListObjectVersionsPages(&s3.ListObjectVersionsInput{
@@ -122,7 +123,7 @@ func buildVersionDictionary(svc *s3.S3, bucket string, target time.Time) (final 
 	return
 }
 
-func processDictionary(svc *s3.S3, bucket string, final map[string]s3.ObjectVersion) error {
+func processDictionary(svc s3iface.S3API, bucket string, final map[string]s3.ObjectVersion) error {
 	log.Info("Processing final map", final)
 	for key, value := range final {
 		err := setVersion(svc, bucket, key, *value.VersionId)

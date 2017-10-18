@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -16,6 +17,21 @@ func ptrTo(s string) *string {
 func TestMain(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Main")
+}
+
+// Define a mock struct to be used in your unit tests of myFunc.
+type mockS3Client struct {
+	CopySrc *string
+	Bucket  *string
+	Key     *string
+	s3iface.S3API
+}
+
+func (m *mockS3Client) CopyObject(input *s3.CopyObjectInput) (*s3.CopyObjectOutput, error) {
+	m.Key = input.Key
+	m.Bucket = input.Bucket
+	m.CopySrc = input.CopySource
+	return nil, nil
 }
 
 var _ = Describe("Main", func() {
@@ -130,5 +146,13 @@ var _ = Describe("Main", func() {
 		processVersion(&final, startTime, &file)
 
 		Expect(final["file1"]).To(Equal(filev2))
+	})
+
+	It("Sets a version", func() {
+		mockSvc := &mockS3Client{}
+		setVersion(mockSvc, "bucket", "key", "versionid")
+		Expect(*(mockSvc.Key)).To(Equal("key"))
+		Expect(*(mockSvc.Bucket)).To(Equal("bucket"))
+		Expect(*(mockSvc.CopySrc)).To(Equal("/bucket/key?versionId=versionid"))
 	})
 })
