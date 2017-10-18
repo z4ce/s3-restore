@@ -1,0 +1,8 @@
+builds:
+  - binary: s3-restore
+    goos:
+      - windows
+      - darwin
+      - linux
+    goarch:
+      - amd64
